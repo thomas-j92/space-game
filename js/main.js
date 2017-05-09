@@ -7,14 +7,18 @@ var b_ctx;						// context - 2d
 var p_ctx;						// context - 2d
 var ship;						// stores ship details
 var ship_speed 			= 10;	// stores speed of ship
-var bullet_speed 		= 3;	// how fast ship fires
+var bullet_speed 		= 4;	// how fast ship fires
 var elements 			= []; 	// all elements on screen (ships - lasers are stored seperately)
 var lasers 				= [];  	// all lasers on screen
 var lasers_max			= 3;  	// how many lasers they can fire at once - keeps page speeds down
 var lasers_available	= 3;	// how many lasers they can fire currently
 var enemies 			= [];
-var enemies_ship_speed 	= 5; 
-var level 				= 20;
+var enemies_ship_speed 	= 1; 
+var enemies_per_row 	= 0;
+var level 				= 5;
+
+var isFiring 			= false;
+var movingEnemies 		= true; 		
 
 
 $(function() {
@@ -59,9 +63,121 @@ function startGame() {
 	ship 				= new Ship(starting_x, starting_y, ship_width, ship_height, 1, '000', true); // create Ship object
 	elements.push(ship); // add to array - used by drawCanvas to draw all objects
 
+	setUpAnimations();
+
 	setUpLevel();
 
 	drawCanvas(); // wipes canvas clean and re-populates using various arrays (var lasers, elements etc)
+}
+
+function setUpAnimations() {
+	setInterval(function() {
+		// if anything is currently firing, loop through each laser and move them
+		if(isFiring) {
+			console.log('firing');
+			$.each(lasers, function() {
+				var laser = $(this)[0];
+
+				// gradually move laser closer to final destination 
+				if(laser.y < laser.endY) { // shoot downwards
+					laser.y++;
+				} else { // shoot upwards
+					laser.y-=bullet_speed;
+				}
+
+				if(laser.y == laser.endY) { // if laser has reached end of maxY, remove it
+					laser.remove(); // remove laser from canvas
+				}
+
+				// check if bullet has set any enemies, if it has, remove laser and enemy
+				$.each(enemies, function() {
+					var this_enemy = $(this)[0];
+
+					if(laser.y < (this_enemy.y + this_enemy.height) && laser.y > (this_enemy.y) && laser.x < (this_enemy.x + this_enemy.width) && laser.x > this_enemy.x) {
+						laser.remove();
+						this_enemy.die();
+					}
+				});
+
+				// if no lasers are firing, stop this from running (until another laser is fired)
+				if(lasers.length == 0) {
+					isFiring = false;
+				}
+			})
+		}
+
+		if(movingEnemies) {
+			// if not set before, make enemies go left
+			if(typeof enemyDirection == 'undefined') {
+				enemyDirection = 'right';
+			}
+
+			//console.log(enemyDirection);
+
+			//var enemy_at_end = enemies[enemies_per_row-1];
+
+			// enemies[enemy_id].x += enemies_ship_speed;
+			var enemy_at_end_index 	= false;
+			var current_row 		= 0;
+			$.each(enemies, function() {
+				var e = $(this)[0];
+
+				if(current_row == 0) {
+					current_row = e.y;
+				}
+
+				if(current_row != e.y) {
+					return false; 
+				}
+
+				enemy_at_end_index++;
+			});
+
+			//console.log(enemy_at_end);
+			var enemy_at_end = enemies[enemy_at_end_index-1];
+
+			var add_row = false;
+			if((enemy_at_end.x + enemies_ship_speed + enemy_at_end.width) > enemy_canvas.width) {
+				enemyDirection = 'left';
+				// enemy_at_end.y += 10;
+				add_row = true;
+			}
+			if((enemies[0].x - enemies_ship_speed) <= 0) {
+				enemyDirection = 'right';
+
+				add_row = true;
+				// enemy_at_end.y += 10;
+			}
+
+			$.each(enemies, function() {
+				var enemy = $(this)[0];
+
+				if(add_row) {
+					enemy.y += 10;
+				}
+
+				// make enemies go left
+				if(enemyDirection == 'left') { 
+					enemy.x -= enemies_ship_speed;	
+				} else { // make enemies go right
+					enemy.x += enemies_ship_speed;
+				}
+
+				// if((enemy.x + enemies_ship_speed) > enemy_canvas.width) {
+				// 	enemyDirection = "right";
+				// 	enemy.y += 10;
+				// }
+				// if((enemy.x - enemies_ship_speed) < 0) {
+				// 	enemyDirection = "left";
+				// 	enemy.y += 10;
+				// }
+				
+			});
+
+		}
+
+		drawCanvas();
+	}, 1);
 }
 
 function setUpLevel() {
@@ -81,8 +197,9 @@ function setUpLevel() {
 
 		// if the new X coord overlaps the boundary of the canvas, add to new row
 		if((enemy_x+enemy.width) > enemy_canvas.width) {
-			enemy_x 	= enemy_starting_x;
-			enemy_y 	= (enemy.y + enemy.height + enemy_y_pad);
+			enemies_per_row = (enemies.length + 1); // store current number of enemies - so we know how many enemies their are per line
+			enemy_x 		= enemy_starting_x;
+			enemy_y 		= (enemy.y + enemy.height + enemy_y_pad);
 		}
 
 		enemy.store();
@@ -127,32 +244,8 @@ function Ship(x, y, width, height, border, color, fill) {
 			var laser 	= new Laser(startX, startY, 0); // create new Laser object
 			lasers.push(laser); // add to laser array
 			updateLaserCount(lasers_available-1); // update laser count
-		
-			var firing_animation = setInterval(function() {
-				// gradually move laser closer to final destination 
-				if(laser.y < laser.endY) { //shoot downwards
-					laser.y++;
-				} else { //shoot upwards
-					laser.y-=bullet_speed;
-				}
 
-				if(laser.y == laser.endY) { //if laser has reached end of maxY, remove it
-					clearInterval(firing_animation); //stop animation from running
-					laser.remove(); //remove laser from canvas
-				}
-
-				$.each(enemies, function() {
-					var this_enemy = $(this)[0];
-
-					if(laser.y < (this_enemy.y + this_enemy.height) && laser.y > (this_enemy.y) && laser.x < (this_enemy.x + this_enemy.width) && laser.x > this_enemy.x) {
-						laser.remove();
-						clearInterval(firing_animation); //stop animation from running
-						this_enemy.die();
-					}
-				});
-
-				drawCanvas();
-			}, 1);
+			isFiring = true; // animations check for this variable - will cause animations to run
 		}
 	};
 }
@@ -185,35 +278,21 @@ function Enemy(x, y) {
 	this.draw 	= function() {
 		e_ctx.beginPath();
 		e_ctx.fillRect(this.x, this.y, this.width, this.height);
-
-		var enemy_id = this.id;
-		//console.log(el);
-		// setInterval(function() {
-		// 	enemies[enemy_id].x += enemies_ship_speed;
-
-		// 	if((enemies[enemy_id].x + enemies_ship_speed) > enemy_canvas.width) {
-		// 		enemies[enemy_id].x = 0;
-		// 		enemies[enemy_id].y += 10;
-		// 	}
-
-		// 	drawCanvas();
-		// }, 1000)
 	};
 	this.die 	= function() {
 		//remove from array so it's not added again
 		var i = enemies.indexOf(this);
 		if(i != -1) {
 			enemies.splice(i, 1);
+			console.log(enemies);
 		}
 
 		if(enemies.length == 0) {
 			level++;
 			setUpLevel();
+
 		}
 	};
-	this.move 	= function() {
-		
-	}
 }
 
 function moveShip(e) {
