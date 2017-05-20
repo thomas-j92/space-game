@@ -13,19 +13,21 @@ var ship_height 		= 15;   // height of ship
 var nose_width 			= 12; 	// width of ship nose
 var nose_height 		= 35;   // height of ship nose
 var ship_speed 			= 10;	// stores speed of ship
-var bullet_speed 		= 4;	// how fast ship fires
+var bullet_speed 		= 1;	// how fast ship fires
 
 var elements 			= []; 	// all elements on screen (ships - lasers are stored seperately)
 var lasers 				= [];  	// all lasers on screen
 var lasers_max			= 3;  	// how many lasers they can fire at once - keeps page speeds down
 var lasers_available	= 3;	// how many lasers they can fire currently
 var enemies 			= [];
-var enemies_ship_speed 	= 1; 
+var enemies_ship_speed 	= 1;
+
+// globals - change throughout the application 
 var enemies_per_row 	= 0;
 var level 				= 5;
-
 var isFiring 			= false;
-var movingEnemies 		= true; 		
+var movingEnemies 		= false;
+var shooters 			= [];
 
 
 $(function() {
@@ -68,9 +70,9 @@ function startGame() {
 	ship 				= new Ship(starting_x, starting_y, ship_width, ship_height, 1, '000', true); // create Ship object
 	elements.push(ship); // add to array - used by drawCanvas to draw all objects
 
-	//setUpAnimations();
+	setUpAnimations();
 
-	//setUpLevel();
+	setUpLevel();
 
 	drawCanvas(); // wipes canvas clean and re-populates using various arrays (var lasers, elements etc)
 }
@@ -90,7 +92,7 @@ function setUpAnimations() {
 					laser.y-=bullet_speed;
 				}
 
-				if(laser.y == laser.endY) { // if laser has reached end of maxY, remove it
+				if(laser.y <= laser.endY) { // if laser has reached end of maxY, remove it
 					laser.remove(); // remove laser from canvas
 				}
 
@@ -117,8 +119,6 @@ function setUpAnimations() {
 				enemyDirection = 'right';
 			}
 
-			//console.log(enemyDirection);
-
 			//var enemy_at_end = enemies[enemies_per_row-1];
 
 			// enemies[enemy_id].x += enemies_ship_speed;
@@ -138,7 +138,6 @@ function setUpAnimations() {
 				enemy_at_end_index++;
 			});
 
-			//console.log(enemy_at_end);
 			var enemy_at_end = enemies[enemy_at_end_index-1];
 
 			var add_row = false;
@@ -189,7 +188,7 @@ function setUpLevel() {
 	$('#level').text(level);
 
 	// create enemies and store in array
-	var num_of_enemies = (level*2);
+	var num_of_enemies = 1; //(level*2);
 	var enemy_starting_x 	= 20;
 	var enemy_x 			= enemy_starting_x;
 	var enemy_y 			= 20;
@@ -215,6 +214,8 @@ function drawShip(element) {
 	p_ctx.lineWidth	= element.border;
 
 	if(element.fill) { // fill element with a color if fill set to true
+		shooters = []; // refresh shooter array
+
 		// ship body
 		p_ctx.fillStyle = "#"+ element.color;
 		p_ctx.fillRect(element.x,element.y,element.width,element.height);
@@ -249,6 +250,10 @@ function drawShip(element) {
 		var shooter_x 		= connect_x + (connect_width/2) - (shooter_width/2);
 		var shooter_y 		= nose_y + (nose_height * 0.25);
 		p_ctx.fillRect(shooter_x, shooter_y, shooter_width, shooter_height);
+		//add left laster shooter coords to array
+		var shooter_array 	= [shooter_x, shooter_y];
+		shooters.push(shooter_array);
+
 		// left shooter detail
 		var detail_indent 	= 1;
 		var detail_width 	= shooter_width + (detail_indent*2);
@@ -268,6 +273,9 @@ function drawShip(element) {
 		// right shooter detail
 		detail_x = shooter_x - detail_indent;
 		p_ctx.fillRect(detail_x, detail_y, detail_width, detail_height);
+		//add right laster shooter coords to array
+		shooter_array 	= [shooter_x, shooter_y];
+		shooters.push(shooter_array);
 
 		// left engine
 		var engine_width 	= 7;
@@ -310,12 +318,14 @@ function Ship(x, y, width, height, border, color, fill) {
 	this.fill 	= fill;
 	this.shoot 	= function() { // fires a laser
 		if(lasers_available > 0) { // only shoot if you've got lasers to shoot
-			var startX = this.x + (this.width/2); // shoot from middle of ship 
-			var startY = this.y;
-			var laser 	= new Laser(startX, startY, 0); // create new Laser object
-			lasers.push(laser); // add to laser array
+			$.each(shooters, function() {
+				var shooter = $(this);
+				var startX 	= shooter[0];
+				var startY 	= shooter[1];
+				laser 	= new Laser(startX, startY, 0); // create new Laser object
+				lasers.push(laser); // add to laser array
+			});
 			updateLaserCount(lasers_available-1); // update laser count
-
 			isFiring = true; // animations check for this variable - will cause animations to run
 		}
 	};
@@ -341,21 +351,33 @@ function Enemy(x, y) {
 	this.id 	= enemies.length;
 	this.x 		= x;
 	this.y 		= y;
-	this.width 	= 100;
-	this.height = 10;
+	this.width 	= 50;
+	this.height = 50;
 	this.store 	= function() {
 		enemies.push(this);
 	};
 	this.draw 	= function() {
 		e_ctx.beginPath();
-		e_ctx.fillRect(this.x, this.y, this.width, this.height);
+
+		var wing_width 	= 3;
+
+		// left wing
+		e_ctx.fillRect(this.x, this.y, wing_width, this.height);
+
+		// wing connector
+		var connector_height 	= 10;
+		var connector_y 		= this.y+(this.height/2)-(connector_height/2);
+		e_ctx.fillRect(this.x, connector_y, this.width, wing_width);
+
+		// right wing
+		var rightX 	= this.x + this.width;
+		e_ctx.fillRect(rightX, this.y, wing_width, this.height);
 	};
 	this.die 	= function() {
 		//remove from array so it's not added again
 		var i = enemies.indexOf(this);
 		if(i != -1) {
 			enemies.splice(i, 1);
-			console.log(enemies);
 		}
 
 		if(enemies.length == 0) {
@@ -391,12 +413,12 @@ function drawCanvas() {
 		var element = $(this)[0];
 		drawShip(element);
 	});
-	// $.each(lasers, function() {
-	// 	var element = $(this)[0];
-	// 	drawLaser(element);
-	// });
-	// $.each(enemies, function() {
-	// 	var element = $(this)[0];
-	// 	element.draw();
-	// });		
+	$.each(lasers, function() {
+		var element = $(this)[0];
+		drawLaser(element);
+	});
+	$.each(enemies, function() {
+		var element = $(this)[0];
+		element.draw();
+	});		
 }

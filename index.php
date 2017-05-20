@@ -5,7 +5,7 @@
 
 	<link rel="stylesheet" type="text/css" href="css/main.css">
 
-	<script type="text/javascript" src="../shared/js/jquery/jquery.min.js"></script>
+	<script type="text/javascript" src="../shared-resources/js/jquery/jquery.min.js"></script>
 	<script type="text/javascript" src="js/main.js"></script>
 </head>
 <body>
